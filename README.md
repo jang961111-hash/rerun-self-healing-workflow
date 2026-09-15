@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RE:RUN — 스스로 고치는 업무 자동화
 
-## Getting Started
+> 원티드 AI Championship 2026 출품작
+> 자연어로 정의한 반복업무가 실패하면, AI가 원인을 진단하고 수정안을 **제안**합니다.
+> 적용은 오직 **사람의 승인**으로만 이뤄집니다.
 
-First, run the development server:
+## 해결하려는 문제
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+비개발 실무자가 만든 업무 자동화는 **처음 만들 때가 아니라, 예외 입력을 만나 조용히 깨질 때** 버려집니다.
+자유 서식 이력서 한 장, 예상 밖의 날짜 표기 하나에 자동화가 멈추면, 고칠 줄 모르는 실무자는 수작업으로 돌아갑니다.
+
+RE:RUN은 이 "깨지는 순간"을 자동화의 끝이 아니라 **자가수정 사이클의 시작**으로 바꿉니다.
+
+## 핵심 사이클 (데모에서 그대로 재현됩니다)
+
+```
+자연어 업무 정의 → 워크플로우 생성 → 실행
+    → ④번 이력서(자유 서식)에서 출력 계약 검증 실패   ← 의도된 현실적 실패
+    → AI 자가진단: 원인 + 프롬프트 수정안(before/after diff) 제안
+    → 🔒 사람 승인 게이트 (승인 전에는 어떤 수정도 적용되지 않음)
+    → 승인 → 실패 단계만 재실행 → 전체 성공 → 스크리닝 리포트
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+실패는 연출이 아닙니다. v1 추출 규칙("경력 N년 명시만 인정")이 자유 서식 이력서를
+만나 **매 실행 100% 재현**되는 실제 검증 실패이며(10/10 실측), AI의 진단·수정안도
+데모 시점에 실시간 생성됩니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 왜 승인 게이트인가
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+AI가 프로덕션 워크플로우를 자율 수정하는 순간 엔터프라이즈 도입은 불가능해집니다.
+RE:RUN의 모든 수정은 ① AI는 제안만 ② 사람이 diff를 보고 승인 ③ 전 과정이
+타임스탬프 감사 로그(JSON export)에 기록 — 의 3중 구조로 통제됩니다.
+반려하면 원본 설정이 그대로 유지되는 것도 UI에서 직접 확인할 수 있습니다.
 
-## Learn More
+## 기술 구성
 
-To learn more about Next.js, take a look at the following resources:
+- Next.js (App Router, TypeScript) · Vercel 배포
+- OpenAI GPT (구조화 추출·진단·매칭, json_schema strict + temperature 0)
+- Zod — 워크플로우 단계 간 데이터 계약 검증 (실패 감지의 핵심)
+- DB 없음: 실행 상태는 클라이언트, 증빙은 감사 로그 JSON export
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 실행 방법
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+echo "OPENAI_API_KEY=sk-..." > .env.local
+npm run dev   # http://localhost:3000
+```
 
-## Deploy on Vercel
+## 데모 데이터
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`lib/data.ts` — 가명 처리된 목업 이력서 5건 + 채용공고 1건 (실존 인물·기업과 무관).
+지원자 4(최지우)가 자유 서식 실패 트리거이며, 복구 후 상위권으로 랭크되는 것이
+이 데모의 핵심 서사입니다: **규칙이 버릴 뻔한 인재를 자가수정이 살려냅니다.**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 증빙
+
+- `docs/evidence/` — 프롬프트 원문, 최초 전체 사이클 실증 로그(타임스탬프), 리허설 기록
+- `CONTRACT.md` — 코드 작성 전 정의한 성공 판정 기준표와 실측 대조
+
+## AI 도구
+
+- OpenAI GPT-4.1 mini — 서비스 런타임 (추출·진단·매칭·계획)
+- Claude Code (Fable 5) — 개발 전 과정
