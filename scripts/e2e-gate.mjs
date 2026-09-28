@@ -1,9 +1,20 @@
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chromium } from "playwright";
-const shot = (page, n) => page.screenshot({ path: `docs/evidence/screens/${n}.png`, fullPage: true });
+
+// 사용법: E2E_BASE_URL=http://localhost:3210 E2E_SCREENSHOT_DIR=<폴더> node scripts/e2e-gate.mjs
+// 스크린샷 기본 저장 위치는 임시 폴더다. 추적 중인 docs/evidence/screens/를
+// 갱신하려면 E2E_SCREENSHOT_DIR=docs/evidence/screens 로 명시한다.
+const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:3210";
+const OUT_DIR = process.env.E2E_SCREENSHOT_DIR || mkdtempSync(join(tmpdir(), "rerun-e2e-"));
+mkdirSync(OUT_DIR, { recursive: true });
+console.log(`대상 ${BASE_URL} · 스크린샷 → ${OUT_DIR}`);
+const shot = (page, n) => page.screenshot({ path: join(OUT_DIR, `${n}.png`), fullPage: true });
 const t0 = Date.now();
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-await page.goto("http://localhost:3210");
+await page.goto(BASE_URL);
 await shot(page, "01-landing");
 
 // 1. 워크플로우 생성 (A1)
