@@ -26,6 +26,8 @@ function req(headers: Record<string, string>, body: unknown = { task: "t" }) {
 }
 
 beforeEach(() => {
+  // 기존 케이스는 요청마다 다른 IP로 격리한다 → XFF를 믿는 설정에서 돌린다
+  vi.stubEnv("RERUN_TRUST_PROXY", "1");
   mockJsonCall.mockReset();
   mockJsonCall.mockResolvedValue({ steps: [] });
 });
@@ -79,5 +81,49 @@ describe("T7 LLM 엔드포인트 보호", () => {
 
     const other = await plan(req({ origin: "http://demo.local", "x-forwarded-for": "203.0.113.8" }));
     expect(other.status).toBe(200);
+  });
+});
+
+describe("MED-2 X-Forwarded-For 위조로 속도 제한 우회", () => {
+  // 매 테스트 새 모듈 → 속도 제한 카운터가 비어 있는 상태
+  async function freshGuard() {
+    vi.resetModules();
+    return (await import("@/lib/guard")).guard;
+  }
+  const hit = (guard: (r: Request) => Response | null, xff: string) =>
+    guard(req({ origin: "http://demo.local", "x-forwarded-for": xff }))?.status ?? 200;
+
+  it("RERUN_TRUST_PROXY가 없으면 XFF를 믿지 않는다 — 매번 다른 XFF를 보내도 같은 한도", async () => {
+    vi.stubEnv("RERUN_TRUST_PROXY", "");
+    vi.stubEnv("RERUN_RATE_LIMIT_PER_MIN", "3");
+    const guard = await freshGuard();
+    const codes = ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"].map((ip) => hit(guard, ip));
+    expect(codes).toEqual([200, 200, 200, 429]);
+  });
+
+  it("RERUN_TRUST_PROXY=1이면 프록시가 덧붙인 맨 오른쪽 값을 쓴다 — 왼쪽 위조는 무시", async () => {
+    vi.stubEnv("RERUN_TRUST_PROXY", "1");
+    vi.stubEnv("RERUN_RATE_LIMIT_PER_MIN", "3");
+    const guard = await freshGuard();
+    const codes = ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"].map((spoof) =>
+      hit(guard, `${spoof}, 203.0.113.7`)
+    );
+    expect(codes).toEqual([200, 200, 200, 429]);
+    expect(hit(guard, "9.9.9.9, 203.0.113.8")).toBe(200); // 실제로 다른 클라이언트
+  });
+
+  it("RERUN_RATE_LIMIT_PER_MIN=0은 제한 끔", async () => {
+    vi.stubEnv("RERUN_RATE_LIMIT_PER_MIN", "0");
+    const guard = await freshGuard();
+    const codes = Array.from({ length: 40 }, () => hit(guard, "203.0.113.9"));
+    expect(codes.every((c) => c === 200)).toBe(true);
+  });
+
+  it("숫자가 아닌 값·음수는 기본값 30", async () => {
+    vi.stubEnv("RERUN_RATE_LIMIT_PER_MIN", "abc");
+    const guard = await freshGuard();
+    const codes = Array.from({ length: 31 }, () => hit(guard, "203.0.113.10"));
+    expect(codes.filter((c) => c === 200)).toHaveLength(30);
+    expect(codes[30]).toBe(429);
   });
 });

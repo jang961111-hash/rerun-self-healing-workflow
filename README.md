@@ -54,7 +54,11 @@ LLM을 호출하는 `/api/plan·extract·diagnose·match`는 `lib/guard.ts`를 �
 
 - **출처 확인**: 같은 출처(`Origin` 헤더의 host = 요청 host)에서 온 요청만 받습니다. curl 같은 스크립트 호출은 403입니다.
   스크립트로 부르려면 `RERUN_API_TOKEN`을 설정하고 `x-rerun-token` 헤더에 같은 값을 넣습니다.
-- **속도 제한**: IP당 분당 `RERUN_RATE_LIMIT_PER_MIN`회(기본 30). 데모 1사이클은 약 10회입니다. 넘으면 429 + `Retry-After`.
+- **속도 제한**: 클라이언트당 분당 `RERUN_RATE_LIMIT_PER_MIN`회(기본 30, `0`이면 제한 끔). 데모 1사이클은 약 10회입니다. 넘으면 429 + `Retry-After`.
+  - 클라이언트 구분은 `RERUN_TRUST_PROXY=1`일 때만 `X-Forwarded-For`의 **맨 오른쪽 값**(신뢰 프록시가 붙인 값)을 씁니다.
+    설정하지 않으면 헤더를 믿지 않고 서버 인스턴스 전체를 한 묶음으로 셉니다(로컬 데모 기본값).
+  - `RERUN_TRUST_PROXY=1`은 Vercel처럼 이 헤더를 덮어쓰거나 끝에 붙이는 **신뢰 프록시 한 단 뒤에서만** 켜야 합니다.
+    프록시 없이 켜면 클라이언트가 헤더를 위조해 한도를 피할 수 있습니다.
 - **승인 게이트**: `/api/extract`는 원본 v1 프롬프트이거나, 진단이 제안하고 `/api/approve`로 승인된 프롬프트만 실행합니다(HMAC 서명, `lib/approval.ts`).
   서명 키는 `RERUN_SIGNING_SECRET` → 없으면 `OPENAI_API_KEY`에서 파생합니다.
 
