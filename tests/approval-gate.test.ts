@@ -248,3 +248,22 @@ describe("LOW /api/approve 입력 방어", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("LOW extract·diagnose 비JSON 본문", () => {
+  const raw = (path: string) =>
+    new Request(`http://localhost${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", origin: "http://localhost" },
+      body: "{not json",
+    });
+
+  it.each([
+    ["extract", extract, "/api/extract"],
+    ["diagnose", diagnose, "/api/diagnose"],
+  ] as const)("%s: JSON이 아닌 본문은 LLM 호출 없이 400", async (_, route, path) => {
+    mockJsonCall.mockClear();
+    const res = await route(raw(path));
+    expect(res.status).toBe(400);
+    expect(mockJsonCall).not.toHaveBeenCalled();
+  });
+});

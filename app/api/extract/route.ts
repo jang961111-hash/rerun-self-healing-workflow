@@ -9,7 +9,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const blocked = guard(req);
   if (blocked) return blocked;
-  const { resumeText, prompt, approvalToken } = await req.json();
+  let body: { resumeText?: unknown; prompt?: unknown; approvalToken?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "JSON 본문이 필요합니다" }, { status: 400 });
+  }
+  const { resumeText, prompt, approvalToken } = body ?? {};
   // 승인 게이트 서버 강제 — 원본(v1)이나 사람이 승인한 수정안만 실행한다
   if (!isRunnablePrompt(prompt, approvalToken)) {
     return NextResponse.json(
@@ -19,7 +25,7 @@ export async function POST(req: Request) {
   }
   try {
     const raw = await jsonCall<unknown>(
-      prompt,
+      prompt as string,
       `이력서 원문:\n${resumeText}`,
       "candidate_profile",
       EXTRACT_JSON_SCHEMA

@@ -12,7 +12,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const blocked = guard(req);
   if (blocked) return blocked;
-  const { prompt, resumeId, error, errorSig } = await req.json();
+  let body: { prompt?: unknown; resumeId?: unknown; error?: unknown; errorSig?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON 본문이 필요합니다" }, { status: 400 });
+  }
+  const { prompt, resumeId, error, errorSig } = body ?? {};
   // 진단 입력은 전부 서버가 아는 값이어야 한다 — 아니면 수정안(proposed_prompt)을
   // 원하는 방향으로 유도한 뒤 승인·실행하는 우회가 가능하다
   const resume = RESUMES.find((r) => r.id === resumeId);
