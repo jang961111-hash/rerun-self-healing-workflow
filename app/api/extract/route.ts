@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { jsonCall } from "@/lib/llm";
+import { guard } from "@/lib/guard";
 import { ProfileContract, EXTRACT_JSON_SCHEMA } from "@/lib/schema";
 import { isRunnablePrompt } from "@/lib/approval";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  const blocked = guard(req);
+  if (blocked) return blocked;
   const { resumeText, prompt, approvalToken } = await req.json();
   // 승인 게이트 서버 강제 — 원본(v1)이나 사람이 승인한 수정안만 실행한다
   if (!isRunnablePrompt(prompt, approvalToken)) {

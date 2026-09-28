@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonCall } from "@/lib/llm";
+import { guard } from "@/lib/guard";
 import { DIAGNOSE_SYSTEM } from "@/lib/prompts";
 import { DIAGNOSE_JSON_SCHEMA } from "@/lib/schema";
 import type { Diagnosis } from "@/lib/types";
@@ -8,6 +9,8 @@ import { sign } from "@/lib/approval";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  const blocked = guard(req);
+  if (blocked) return blocked;
   const { prompt, resumeText, error } = await req.json();
   try {
     const out = await jsonCall<Diagnosis>(

@@ -23,7 +23,8 @@ const PROFILE_99 = {
 function post(body: unknown, path = "/api/extract") {
   return new Request(`http://localhost${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // 데모 화면과 같은 출처에서 보낸 요청으로 만든다 (lib/guard.ts 통과)
+    headers: { "Content-Type": "application/json", origin: "http://localhost" },
     body: JSON.stringify(body),
   });
 }

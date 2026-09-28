@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonCall } from "@/lib/llm";
+import { guard } from "@/lib/guard";
 import { MATCH_SYSTEM } from "@/lib/prompts";
 import { MATCH_JSON_SCHEMA } from "@/lib/schema";
 import type { MatchRow } from "@/lib/types";
@@ -7,6 +8,8 @@ import type { MatchRow } from "@/lib/types";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  const blocked = guard(req);
+  if (blocked) return blocked;
   const { jobPosting, profiles } = await req.json();
   try {
     const out = await jsonCall<{ rows: MatchRow[] }>(

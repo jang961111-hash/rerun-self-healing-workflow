@@ -47,6 +47,20 @@ echo "OPENAI_API_KEY=sk-..." > .env.local
 npm run dev   # http://localhost:3000
 ```
 
+### API 보호 (데모용 최소 설정)
+
+LLM을 호출하는 `/api/plan·extract·diagnose·match`는 `lib/guard.ts`를 거칩니다.
+데모 화면에서 쓸 때는 따로 설정할 것이 없습니다.
+
+- **출처 확인**: 같은 출처(`Origin` 헤더의 host = 요청 host)에서 온 요청만 받습니다. curl 같은 스크립트 호출은 403입니다.
+  스크립트로 부르려면 `RERUN_API_TOKEN`을 설정하고 `x-rerun-token` 헤더에 같은 값을 넣습니다.
+- **속도 제한**: IP당 분당 `RERUN_RATE_LIMIT_PER_MIN`회(기본 30). 데모 1사이클은 약 10회입니다. 넘으면 429 + `Retry-After`.
+- **승인 게이트**: `/api/extract`는 원본 v1 프롬프트이거나, 진단이 제안하고 `/api/approve`로 승인된 프롬프트만 실행합니다(HMAC 서명, `lib/approval.ts`).
+  서명 키는 `RERUN_SIGNING_SECRET` → 없으면 `OPENAI_API_KEY`에서 파생합니다.
+
+한계: 출처 헤더는 스크립트가 위조할 수 있고, 속도 제한은 서버 인스턴스별 메모리에만 있습니다.
+공개 배포라면 플랫폼 WAF·계정 인증·OpenAI 월 사용 한도를 함께 써야 합니다.
+
 ## 데모 데이터
 
 `lib/data.ts` — 가명 처리된 목업 이력서 5건 + 채용공고 1건 (실존 인물·기업과 무관).
