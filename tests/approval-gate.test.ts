@@ -215,3 +215,36 @@ describe("T6 승인 흐름 — diagnose → approve → extract", () => {
     expect((await res.json()).approval_token).toBeUndefined();
   });
 });
+
+describe("LOW /api/approve 입력 방어", () => {
+  it("JSON이 아닌 본문은 400", async () => {
+    const res = await approve(
+      new Request("http://localhost/api/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", origin: "http://localhost" },
+        body: "{not json",
+      })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("유효한 수정안이라도 다른 출처(Origin 없음)에서 온 승인 요청은 403", async () => {
+    const { error, error_sig } = await failedExtract();
+    mockJsonCall.mockResolvedValueOnce({
+      root_cause: "r", explanation: "e", proposed_prompt: "v2", risk_note: "n",
+    });
+    const d = await (
+      await diagnose(
+        post({ prompt: EXTRACT_PROMPT_V1, resumeId: CAND4.id, error, errorSig: error_sig }, "/api/diagnose")
+      )
+    ).json();
+    const res = await approve(
+      new Request("http://localhost/api/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposed_prompt: d.proposed_prompt, proposal_sig: d.proposal_sig }),
+      })
+    );
+    expect(res.status).toBe(403);
+  });
+});

@@ -52,13 +52,22 @@ export default function Home() {
     setAudit((a) => [...a, { ts: new Date().toISOString(), type, actor, detail }]);
   }
 
+  // 실패(4xx·5xx, JSON 아닌 본문, 네트워크 오류)도 예외 대신 { error }로 돌려준다 —
+  // 예외가 나면 phase가 "planning"·"diagnosing" 등에 멈춘 채 UI가 굳는다
   async function post<T>(url: string, body: unknown): Promise<T> {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return r.json();
+    let r: Response;
+    try {
+      r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      return { ok: false, error: `네트워크 오류: ${String(e)}` } as T;
+    }
+    const data = await r.json().catch(() => null);
+    if (!r.ok) return { ...data, ok: false, error: data?.error ?? `HTTP ${r.status}` } as T;
+    return (data ?? { ok: false, error: "응답을 읽을 수 없습니다" }) as T;
   }
 
   async function generatePlan() {

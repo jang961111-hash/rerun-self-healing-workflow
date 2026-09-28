@@ -49,7 +49,7 @@ npm run dev   # http://localhost:3000
 
 ### API 보호 (데모용 최소 설정)
 
-LLM을 호출하는 `/api/plan·extract·diagnose·match`는 `lib/guard.ts`를 거칩니다.
+LLM을 호출하는 `/api/plan·extract·diagnose·match`와 승인용 `/api/approve`는 `lib/guard.ts`를 거칩니다.
 데모 화면에서 쓸 때는 따로 설정할 것이 없습니다.
 
 - **출처 확인**: 같은 출처(`Origin` 헤더의 host = 요청 host)에서 온 요청만 받습니다. curl 같은 스크립트 호출은 403입니다.
@@ -60,6 +60,8 @@ LLM을 호출하는 `/api/plan·extract·diagnose·match`는 `lib/guard.ts`를 �
   - `RERUN_TRUST_PROXY=1`은 Vercel처럼 이 헤더를 덮어쓰거나 끝에 붙이는 **신뢰 프록시 한 단 뒤에서만** 켜야 합니다.
     프록시 없이 켜면 클라이언트가 헤더를 위조해 한도를 피할 수 있습니다.
 - **승인 게이트**: `/api/extract`는 원본 v1 프롬프트이거나, 진단이 제안하고 `/api/approve`로 승인된 프롬프트만 실행합니다(HMAC 서명, `lib/approval.ts`).
+  진단(`/api/diagnose`)은 원본 v1 프롬프트, 서버에 등록된 이력서 id, 서버가 서명한 추출 오류만 입력으로 받습니다.
+  단, LLM이 만든 수정안 자체는 신뢰 경계 밖이므로 사람이 diff를 보고 승인하는 것이 마지막 방어선입니다.
   서명 키는 `RERUN_SIGNING_SECRET` → 없으면 `OPENAI_API_KEY`에서 파생합니다.
 
 한계: 출처 헤더는 스크립트가 위조할 수 있고, 속도 제한은 서버 인스턴스별 메모리에만 있습니다.
