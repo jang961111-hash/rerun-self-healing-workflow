@@ -27,6 +27,7 @@ interface CandState {
   status: "pending" | "running" | "ok" | "failed" | "skipped";
   profile?: CandidateProfile;
   error?: string;
+  errorSig?: string;
   promptVersion?: number;
 }
 
@@ -82,12 +83,13 @@ export default function Home() {
     prompt: string,
     version: number,
     approvalToken?: string
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<{ ok: true } | { ok: false; error: string; errorSig?: string }> {
     setCands((c) => c.map((x, i) => (i === idx ? { ...x, status: "running" } : x)));
     const out = await post<{
       ok: boolean;
       profile?: CandidateProfile;
       error?: string;
+      error_sig?: string;
     }>("/api/extract", { resumeText: RESUMES[idx].text, prompt, approvalToken });
     if (out.ok && out.profile) {
       profilesRef.current[idx] = out.profile;
@@ -102,11 +104,12 @@ export default function Home() {
       return { ok: true };
     }
     const error = out.error ?? "출력 계약 검증 실패";
+    const errorSig = out.error_sig;
     setCands((c) =>
-      c.map((x, i) => (i === idx ? { status: "failed", error } : x))
+      c.map((x, i) => (i === idx ? { status: "failed", error, errorSig } : x))
     );
     log("STEP_FAILED", "system", `${RESUMES[idx].label} 추출 단계 실패 — ${error}`);
-    return { ok: false, error };
+    return { ok: false, error, errorSig };
   }
 
   async function runMatch() {
@@ -138,20 +141,21 @@ export default function Home() {
           c.map((x, j) => (j > i ? { ...x, status: "skipped" } : x))
         );
         // 방금 받은 오류를 직접 넘긴다 — cands state는 이 클로저에 아직 반영되지 않았다
-        await diagnose(i, r.error);
+        await diagnose(i, r.error, r.errorSig);
         return;
       }
     }
     await runMatch();
   }
 
-  async function diagnose(idx: number, error: string) {
+  async function diagnose(idx: number, error: string, errorSig?: string) {
     setPhase("diagnosing");
     log("DIAGNOSIS_STARTED", "ai", "AI 자가진단 시작 — 실패 지점의 프롬프트·입력·오류 분석");
     const out = await post<Diagnosis & { error?: string }>("/api/diagnose", {
       prompt: EXTRACT_PROMPT_V1,
-      resumeText: RESUMES[idx].text,
+      resumeId: RESUMES[idx].id,
       error,
+      errorSig,
     });
     if (out.error) {
       setBanner(`진단 실패: ${out.error}`);
@@ -279,7 +283,11 @@ export default function Home() {
               않았으므로 재실행 시 같은 지점에서 다시 실패합니다.{" "}
               <button className="ghost" onClick={() =>
                   failedIdx !== null &&
-                  diagnose(failedIdx, cands[failedIdx]?.error ?? "출력 계약 검증 실패")
+                  diagnose(
+                    failedIdx,
+                    cands[failedIdx]?.error ?? "출력 계약 검증 실패",
+                    cands[failedIdx]?.errorSig
+                  )
                 }>
                 진단 다시 보기
               </button>

@@ -9,7 +9,7 @@ const REAL_ERROR =
   "출력 계약 검증 실패 — experience_years: experience_years는 숫자여야 합니다 (null 수신)";
 const FAIL_IDX = 3; // 지원자 4
 
-let diagnoseBodies: { error?: string }[];
+let diagnoseBodies: { error?: string; errorSig?: string; resumeId?: number }[];
 
 beforeEach(() => {
   diagnoseBodies = [];
@@ -29,7 +29,7 @@ beforeEach(() => {
       }
       if (url === "/api/extract") {
         const idx = RESUMES.findIndex((r) => r.text === body.resumeText);
-        if (idx === FAIL_IDX) return json({ ok: false, error: REAL_ERROR });
+        if (idx === FAIL_IDX) return json({ ok: false, error: REAL_ERROR, error_sig: "esig" });
         return json({
           ok: true,
           profile: { name: `p${idx}`, email: null, experience_years: 3, skills: [], summary: "" },
@@ -63,6 +63,9 @@ it("T5: 자동 진단 요청에 실제 추출 실패 오류가 전달된다 (폴
 
   expect(diagnoseBodies).toHaveLength(1);
   expect(diagnoseBodies[0].error).toBe(REAL_ERROR);
+  // MED-1: 원문 대신 이력서 id와 서버 서명을 보낸다
+  expect(diagnoseBodies[0].resumeId).toBe(RESUMES[FAIL_IDX].id);
+  expect(diagnoseBodies[0].errorSig).toBe("esig");
 });
 
 it("T5: '진단 다시 보기'도 같은 실제 오류를 전달한다", async () => {
@@ -73,4 +76,5 @@ it("T5: '진단 다시 보기'도 같은 실제 오류를 전달한다", async (
   fireEvent.click(await screen.findByRole("button", { name: "진단 다시 보기" }));
   await waitFor(() => expect(diagnoseBodies).toHaveLength(2));
   expect(diagnoseBodies[1].error).toBe(REAL_ERROR);
+  expect(diagnoseBodies[1].errorSig).toBe("esig");
 });

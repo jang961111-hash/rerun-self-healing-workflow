@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { jsonCall } from "@/lib/llm";
 import { guard } from "@/lib/guard";
 import { ProfileContract, EXTRACT_JSON_SCHEMA } from "@/lib/schema";
-import { isRunnablePrompt } from "@/lib/approval";
+import { isRunnablePrompt, sign } from "@/lib/approval";
 
 export const maxDuration = 60;
 
@@ -30,9 +30,12 @@ export async function POST(req: Request) {
       const issues = parsed.error.issues
         .map((i) => `${i.path.join(".")}: ${i.message}`)
         .join("; ");
+      const error = `출력 계약 검증 실패 — ${issues}`;
       return NextResponse.json({
         ok: false,
-        error: `출력 계약 검증 실패 — ${issues}`,
+        error,
+        // 서버가 만든 오류임을 서명 — /api/diagnose 는 이 서명이 있는 오류만 받는다
+        error_sig: sign("error", `${resumeText}\n${error}`),
         raw,
       });
     }
