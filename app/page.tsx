@@ -82,7 +82,7 @@ export default function Home() {
     prompt: string,
     version: number,
     approvalToken?: string
-  ) {
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
     setCands((c) => c.map((x, i) => (i === idx ? { ...x, status: "running" } : x)));
     const out = await post<{
       ok: boolean;
@@ -99,13 +99,14 @@ export default function Home() {
         )
       );
       log("STEP_OK", "system", `${RESUMES[idx].label}(${out.profile.name}) 추출 성공 — 계약 검증 통과 (프롬프트 v${version})`);
-      return true;
+      return { ok: true };
     }
+    const error = out.error ?? "출력 계약 검증 실패";
     setCands((c) =>
-      c.map((x, i) => (i === idx ? { status: "failed", error: out.error } : x))
+      c.map((x, i) => (i === idx ? { status: "failed", error } : x))
     );
-    log("STEP_FAILED", "system", `${RESUMES[idx].label} 추출 단계 실패 — ${out.error}`);
-    return false;
+    log("STEP_FAILED", "system", `${RESUMES[idx].label} 추출 단계 실패 — ${error}`);
+    return { ok: false, error };
   }
 
   async function runMatch() {
@@ -130,26 +131,27 @@ export default function Home() {
     setBanner(null);
     log("RUN_STARTED", "system", "워크플로우 실행 시작 (추출 프롬프트 v1)");
     for (let i = 0; i < RESUMES.length; i++) {
-      const ok = await extractOne(i, EXTRACT_PROMPT_V1, 1);
-      if (!ok) {
+      const r = await extractOne(i, EXTRACT_PROMPT_V1, 1);
+      if (!r.ok) {
         setFailedIdx(i);
         setCands((c) =>
           c.map((x, j) => (j > i ? { ...x, status: "skipped" } : x))
         );
-        await diagnose(i);
+        // 방금 받은 오류를 직접 넘긴다 — cands state는 이 클로저에 아직 반영되지 않았다
+        await diagnose(i, r.error);
         return;
       }
     }
     await runMatch();
   }
 
-  async function diagnose(idx: number) {
+  async function diagnose(idx: number, error: string) {
     setPhase("diagnosing");
     log("DIAGNOSIS_STARTED", "ai", "AI 자가진단 시작 — 실패 지점의 프롬프트·입력·오류 분석");
     const out = await post<Diagnosis & { error?: string }>("/api/diagnose", {
       prompt: EXTRACT_PROMPT_V1,
       resumeText: RESUMES[idx].text,
-      error: cands[idx]?.error ?? "출력 계약 검증 실패",
+      error,
     });
     if (out.error) {
       setBanner(`진단 실패: ${out.error}`);
@@ -176,15 +178,15 @@ export default function Home() {
     setPromptVersion(2);
     setPhase("rerunning");
     log("RERUN_STARTED", "system", "실패 단계 재실행 (추출 프롬프트 v2) — 성공한 단계 결과는 재사용");
-    const ok = await extractOne(failedIdx, diagnosis.proposed_prompt, 2, token);
-    if (!ok) {
+    const r = await extractOne(failedIdx, diagnosis.proposed_prompt, 2, token);
+    if (!r.ok) {
       setBanner("재실행도 실패했습니다. 진단을 다시 시도하세요.");
       return;
     }
     // 뒤에 남은(스킵된) 후보 마저 처리
     for (let i = failedIdx + 1; i < RESUMES.length; i++) {
-      const ok2 = await extractOne(i, diagnosis.proposed_prompt, 2, token);
-      if (!ok2) {
+      const r2 = await extractOne(i, diagnosis.proposed_prompt, 2, token);
+      if (!r2.ok) {
         setBanner("후속 후보 처리 중 실패");
         return;
       }
@@ -275,7 +277,10 @@ export default function Home() {
             <p className="dim">
               수정안이 반려되어 원본 설정(v1)이 유지됩니다. 실패 원인이 해결되지
               않았으므로 재실행 시 같은 지점에서 다시 실패합니다.{" "}
-              <button className="ghost" onClick={() => failedIdx !== null && diagnose(failedIdx)}>
+              <button className="ghost" onClick={() =>
+                  failedIdx !== null &&
+                  diagnose(failedIdx, cands[failedIdx]?.error ?? "출력 계약 검증 실패")
+                }>
                 진단 다시 보기
               </button>
             </p>
