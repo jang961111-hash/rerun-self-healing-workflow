@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { jsonCall } from "@/lib/llm";
 import { ProfileContract, EXTRACT_JSON_SCHEMA } from "@/lib/schema";
+import { isRunnablePrompt } from "@/lib/approval";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { resumeText, prompt } = await req.json();
+  const { resumeText, prompt, approvalToken } = await req.json();
+  // 승인 게이트 서버 강제 — 원본(v1)이나 사람이 승인한 수정안만 실행한다
+  if (!isRunnablePrompt(prompt, approvalToken)) {
+    return NextResponse.json(
+      { ok: false, error: "승인되지 않은 프롬프트는 실행할 수 없습니다" },
+      { status: 403 }
+    );
+  }
   try {
     const raw = await jsonCall<unknown>(
       prompt,

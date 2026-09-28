@@ -3,6 +3,7 @@ import { jsonCall } from "@/lib/llm";
 import { DIAGNOSE_SYSTEM } from "@/lib/prompts";
 import { DIAGNOSE_JSON_SCHEMA } from "@/lib/schema";
 import type { Diagnosis } from "@/lib/types";
+import { sign } from "@/lib/approval";
 
 export const maxDuration = 60;
 
@@ -22,7 +23,11 @@ export async function POST(req: Request) {
       "diagnosis",
       DIAGNOSE_JSON_SCHEMA
     );
-    return NextResponse.json(out);
+    // 진단이 만든 수정안임을 서명 — /api/approve 가 이 서명이 있는 수정안만 승인한다
+    return NextResponse.json({
+      ...out,
+      proposal_sig: sign("proposal", out.proposed_prompt),
+    });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

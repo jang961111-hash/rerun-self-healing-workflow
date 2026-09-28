@@ -77,13 +77,18 @@ export default function Home() {
     setPhase("planned");
   }
 
-  async function extractOne(idx: number, prompt: string, version: number) {
+  async function extractOne(
+    idx: number,
+    prompt: string,
+    version: number,
+    approvalToken?: string
+  ) {
     setCands((c) => c.map((x, i) => (i === idx ? { ...x, status: "running" } : x)));
     const out = await post<{
       ok: boolean;
       profile?: CandidateProfile;
       error?: string;
-    }>("/api/extract", { resumeText: RESUMES[idx].text, prompt });
+    }>("/api/extract", { resumeText: RESUMES[idx].text, prompt, approvalToken });
     if (out.ok && out.profile) {
       profilesRef.current[idx] = out.profile;
       setCands((c) =>
@@ -157,18 +162,28 @@ export default function Home() {
 
   async function approve() {
     if (!diagnosis || failedIdx === null) return;
+    // 서버가 수정안 서명을 확인하고 발급한 승인 토큰이 있어야 v2가 실행된다
+    const approval = await post<{ approval_token?: string; error?: string }>(
+      "/api/approve",
+      { proposed_prompt: diagnosis.proposed_prompt, proposal_sig: diagnosis.proposal_sig }
+    );
+    if (!approval.approval_token) {
+      setBanner(`승인 처리 실패: ${approval.error}`);
+      return;
+    }
+    const token = approval.approval_token;
     log("PATCH_APPROVED", "human", "사람이 수정안을 검토하고 승인함 — 이 시점에만 패치가 적용됨");
     setPromptVersion(2);
     setPhase("rerunning");
     log("RERUN_STARTED", "system", "실패 단계 재실행 (추출 프롬프트 v2) — 성공한 단계 결과는 재사용");
-    const ok = await extractOne(failedIdx, diagnosis.proposed_prompt, 2);
+    const ok = await extractOne(failedIdx, diagnosis.proposed_prompt, 2, token);
     if (!ok) {
       setBanner("재실행도 실패했습니다. 진단을 다시 시도하세요.");
       return;
     }
     // 뒤에 남은(스킵된) 후보 마저 처리
     for (let i = failedIdx + 1; i < RESUMES.length; i++) {
-      const ok2 = await extractOne(i, diagnosis.proposed_prompt, 2);
+      const ok2 = await extractOne(i, diagnosis.proposed_prompt, 2, token);
       if (!ok2) {
         setBanner("후속 후보 처리 중 실패");
         return;

@@ -26,6 +26,7 @@ export interface Diagnosis {
   explanation: string;
   proposed_prompt: string;
   risk_note: string;
+  proposal_sig?: string;
 }
 
 export interface MatchRow {
