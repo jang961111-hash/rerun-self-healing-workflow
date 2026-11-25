@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 로컬 AI 도구 상태 (세션 ID·로컬 경로 포함, 공개 금지)
+.omc/
