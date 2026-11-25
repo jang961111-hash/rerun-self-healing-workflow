@@ -4,12 +4,19 @@ import { z } from "zod";
 // LLM 추출 결과는 이 계약을 통과해야 다음 단계로 넘어갈 수 있다.
 // experience_years는 매칭 단계의 필수 입력이므로 null을 허용하지 않는다 —
 // 이것이 지원자 4(자유 서식, 연차 미명시)에서 결정적 실패를 만드는 지점이다.
+// 오류 문구에 실제로 받은 값을 넣는다. zod v4에서 z.number({ error: "고정 문자열" })은
+// .min() 등 이 스키마의 모든 이슈 문구를 덮어써서, 음수·문자열도 "(null 수신)"으로 보고됐다.
+const received = (v: unknown) =>
+  typeof v === "string" || (typeof v === "object" && v !== null)
+    ? JSON.stringify(v)
+    : String(v);
+
 export const ProfileContract = z.object({
   name: z.string().min(1),
   email: z.string().nullable(),
   experience_years: z
-    .number({ error: "experience_years는 숫자여야 합니다 (null 수신)" })
-    .min(0),
+    .number({ error: (iss) => `experience_years는 숫자여야 합니다 (${received(iss.input)} 수신)` })
+    .min(0, { error: (iss) => `experience_years는 0 이상이어야 합니다 (${received(iss.input)} 수신)` }),
   skills: z.array(z.string()),
   summary: z.string(),
 });
